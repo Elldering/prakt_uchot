@@ -20,6 +20,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using static Aardvark.Base.Threading;
+using Path = System.IO.Path;
 
 namespace BudGet2._0
 {
@@ -32,11 +33,32 @@ namespace BudGet2._0
         public static ObservableCollection<string> typesOfNote = new ObservableCollection<string>();
         public MainWindow()
         {
+            bool fileExists = CheckZametkiFileExists();
+
+            if (fileExists)
+            {
+                
+            }
+            else
+            {
+                string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                string filePath = Path.Combine(desktopPath, "zametki.json");
+
+                File.Create(filePath).Close();
+            }
             InitializeComponent();
             Date.SelectedDate = DateTime.Today;
             UpdateDataGrid();
             LoadTypes();
             LoadData();
+            note_Type.ItemsSource = typesOfNote;
+        }
+        public bool CheckZametkiFileExists()
+        {
+            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            string filePath = Path.Combine(desktopPath, "zametki.json");
+
+            return File.Exists(filePath);
         }
 
         private void LoadData()
@@ -52,37 +74,55 @@ namespace BudGet2._0
             var dict = Json.desereolize<Dictionary<string, List<Zametka>>>();
 
             var uniqueTypes = new HashSet<string>();
-
-            foreach (var date in dict)
+            if (dict == null || dict.Count == 0)
             {
-                foreach (var zametka in date.Value)
+                
+            }
+            else
+            {
+                foreach (var date in dict)
                 {
-                    if (!uniqueTypes.Contains(zametka.Type_zametka))
+                    foreach (var zametka in date.Value)
                     {
-                        uniqueTypes.Add(zametka.Type_zametka);
+                        if (!uniqueTypes.Contains(zametka.Type_zametka))
+                        {
+                            uniqueTypes.Add(zametka.Type_zametka);
+                        }
                     }
                 }
-            }
 
-            foreach (var type in uniqueTypes)
-            {
-                note_Type.Items.Add(type);
+                foreach (var type in uniqueTypes)
+                {
+                    typesOfNote.Add(type);
+
+                }
             }
+            
         }
         private void UpdateDataGrid()
         {
 
-            var deserializedData = Json.desereolize<Dictionary<string, ObservableCollection<Zametka>>>();
 
-            if (deserializedData.TryGetValue(Date.SelectedDate.Value.ToString("dd.MM.yyyy"), out var notes1))
+            var deserializedData = Json.desereolize<Dictionary<string, ObservableCollection<Zametka>>>();
+            if (deserializedData == null || deserializedData.Count == 0)
             {
-                DataGrid.ItemsSource = notes1;
+                Dictionary<string, List<Zametka>> data = new Dictionary<string, List<Zametka>>();
+                data["14.05.2023"] = new List<Zametka>();
+                Json.sereolize(data);
             }
             else
             {
-                DataGrid.ItemsSource = null;
+                if (deserializedData.TryGetValue(Date.SelectedDate.Value.ToString("dd.MM.yyyy"), out var notes1))
+                {
+                    DataGrid.ItemsSource = notes1;
+                }
+                else
+                {
+                    DataGrid.ItemsSource = null;
+                }
+                CalculateTotalAmountOfMoney();
             }
-            CalculateTotalAmountOfMoney();
+            
         }
 
         private void SaveData()
@@ -137,7 +177,9 @@ namespace BudGet2._0
         {
             CreateType createType = new CreateType();
             createType.Show();
+            typesOfNote.Clear();
             note_Type.ItemsSource = typesOfNote;
+            LoadTypes();
         }
 
         private void Button_change_Click(object sender, RoutedEventArgs e)
@@ -166,10 +208,10 @@ namespace BudGet2._0
                 MessageBox.Show($"Запись с именем {selectedZametka.name_zametka} не найдена на дату {selectedDate}.");
                 return;
             }
-
+            existingZametka.name_zametka = note_name.Text;
             existingZametka.Type_zametka = note_Type.Text;
             existingZametka.amountOfMoney = double.Parse(Sum.Text);
-            existingZametka.Vichrt = Convert.ToInt32(Sum.Text) < 0;
+            existingZametka.Vichrt = Convert.ToInt32(Sum.Text) < 0 ? false : true;
             existingZametka.TIme_disk = selectedDate;
 
             Json.sereolize(desereolize);
@@ -209,22 +251,7 @@ namespace BudGet2._0
         private void Button_add_Click(object sender, RoutedEventArgs e)
         {
             var deserializedJson = Json.desereolize<Dictionary<string, List<Zametka>>>();
-
-            if (deserializedJson.ContainsKey(Date.SelectedDate.Value.ToString("dd.MM.yyyy")))
-            {
-                Zametka newNote = new Zametka();
-                newNote.name_zametka = note_name.Text;
-                newNote.Type_zametka = note_Type.Text;
-                newNote.amountOfMoney = double.Parse(Sum.Text);
-                newNote.Vichrt = newNote.amountOfMoney < 0 ? false : true; // Тернарный оператор для присвоения значения Vichrt
-                newNote.TIme_disk = Date.SelectedDate.Value.ToString("dd.MM.yyyy");
-
-                deserializedJson[Date.SelectedDate.Value.ToString("dd.MM.yyyy")].Add(newNote);
-
-                Json.sereolize(deserializedJson);
-
-            }
-            else
+            if (deserializedJson == null || deserializedJson.Count == 0)
             {
                 Zametka newNote = new Zametka();
                 newNote.name_zametka = note_name.Text;
@@ -239,6 +266,39 @@ namespace BudGet2._0
 
                 Json.sereolize(deserializedJson);
             }
+            else
+            {
+                if (deserializedJson.ContainsKey(Date.SelectedDate.Value.ToString("dd.MM.yyyy")))
+                {
+                    Zametka newNote = new Zametka();
+                    newNote.name_zametka = note_name.Text;
+                    newNote.Type_zametka = note_Type.Text;
+                    newNote.amountOfMoney = double.Parse(Sum.Text);
+                    newNote.Vichrt = newNote.amountOfMoney < 0 ? false : true; // Тернарный оператор для присвоения значения Vichrt
+                    newNote.TIme_disk = Date.SelectedDate.Value.ToString("dd.MM.yyyy");
+
+                    deserializedJson[Date.SelectedDate.Value.ToString("dd.MM.yyyy")].Add(newNote);
+
+                    Json.sereolize(deserializedJson);
+
+                }
+                else
+                {
+                    Zametka newNote = new Zametka();
+                    newNote.name_zametka = note_name.Text;
+                    newNote.Type_zametka = note_Type.Text;
+                    newNote.amountOfMoney = double.Parse(Sum.Text);
+                    newNote.Vichrt = newNote.amountOfMoney < 0 ? false : true; // Тернарный оператор для присвоения значения Vichrt
+                    newNote.TIme_disk = Date.SelectedDate.Value.ToString("dd.MM.yyyy");
+
+                    List<Zametka> newDate = new List<Zametka>();
+                    newDate.Add(newNote);
+                    deserializedJson.Add(newNote.TIme_disk, newDate);
+
+                    Json.sereolize(deserializedJson);
+                }
+            }
+            
             UpdateDataGrid();
             note_Type.SelectedIndex = -1;
             note_name.Text = null;
@@ -288,10 +348,12 @@ namespace BudGet2._0
                 if (name_zametka != value)
                 {
                     name_zametka = value;
-                    NotifyPropertyChanged("name_zametka");
+                    NotifyPropertyChanged("Name");
                 }
             }
         }
+
+
 
         public string Type
         {
